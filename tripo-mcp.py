@@ -690,8 +690,10 @@ TOOLS = [
                                                                  "local style reference image"},
                 "negative_prompt": {"type": "string"},
                 "model": {"type": "string", "default": MODEL,
-                          "enum": ["v3.1-20260211", "v3.0-20250812", "v2.5-20250123",
-                                   "Nexus-v1.0-20260214", "P-v1.0-20250506"]},
+                          "description": "v3.1-20260211 (HD), v3.0-20250812, v2.5-20250123, "
+                                         "Nexus-v1.0-20260214, or a Smart Mesh P-series id such "
+                                         "as P-v1.0-20250506; any id the backend accepts passes "
+                                         "through"},
                 "generate_parts": {"type": "boolean", "description": "generate as multiple parts"},
                 "texture": {"type": "boolean", "default": True},
                 "pbr": {"type": "boolean", "default": True},
