@@ -439,6 +439,21 @@ class TestCliGenerate(CliBase):
         self.assertEqual(call[call.index("--model-version") + 1], "v3.0-20250812")
         self.assertEqual(call[call.index("--visibility") + 1], "shareable")
 
+    def test_image_prompt_style_and_parts(self):
+        img = Path(self.tmp.name) / "a.png"
+        img.write_bytes(b"x")
+        self.cli("tripo_generate", image=str(img), prompt="shiny", style="lego",
+                 style_image=str(img), generate_parts=True, nowait=True)
+        call = self.call_for("generate", "image")
+        self.assertEqual(call[call.index("--prompt") + 1], "shiny")
+        self.assertEqual(call[call.index("--style") + 1], "lego")
+        self.assertEqual(call[call.index("--style-image") + 1], str(img))
+        self.assertIn("--generate-parts=true", call)
+
+    def test_style_needs_an_image(self):
+        with self.assertRaisesRegex(tripo.TripoError, "style"):
+            self.cli("tripo_generate", prompt="x", style="lego")
+
     def test_four_views_become_multiview(self):
         views = []
         for name in ("front", "back", "left", "right"):
@@ -526,6 +541,55 @@ class TestCliProcessing(CliBase):
         self.assertIn('"status": "success"', self.cli("tripo_task", task_id="t-1"))
 
 
+class TestCliMoreCommands(CliBase):
+    def test_remesh_segment_stylize_texture(self):
+        self.cli("tripo_remesh", input="p-1", quad=True, face_limit=900, bake=False, nowait=True)
+        c = self.call_for("process", "remesh")
+        for expected in ("--quad=true", "--bake=false", "--submit-only"):
+            self.assertIn(expected, c)
+        self.assertEqual(c[c.index("--face-limit") + 1], "900")
+        self.assertEqual(c[-2:], ["--", "p-1"])
+        self.cli("tripo_segment", input="p-1", granularity="detailed", nowait=True)
+        c = self.call_for("process", "segment")
+        self.assertEqual(c[c.index("--granularity") + 1], "detailed")
+        self.cli("tripo_stylize", input="p-1", style="lego", nowait=True)
+        c = self.call_for("process", "stylize")
+        self.assertEqual(c[c.index("--format") + 1], "glb")
+        self.assertEqual(c[c.index("--style") + 1], "lego")
+        self.cli("tripo_texture", input="p-1", mode="pbr", quality="extreme", nowait=True)
+        c = self.call_for("process", "texture")
+        self.assertEqual(c[c.index("--mode") + 1], "pbr")
+        self.assertEqual(c[c.index("--quality") + 1], "extreme")
+
+    def test_rig_takes_more_formats_on_the_cli_only(self):
+        self.responses[("process", "rig")] = (0, "Riggable: true\n")
+        self.cli("tripo_rig", input="p-1", out_format="usdz", nowait=True)
+        self.assertEqual(self.call_for("process", "rig", "--format")[3], "usdz")
+        with self.assertRaisesRegex(tripo.TripoError, "glb or fbx"):
+            self.tool("tripo_rig", backend="api", input="task_1", out_format="usdz")
+
+    def test_task_actions(self):
+        self.cli("tripo_task", action="list", type="rigged", size=5)
+        c = self.call_for("task", "list")
+        self.assertEqual(c[c.index("--type") + 1], "rigged")
+        self.cli("tripo_task", action="wait", task_id="t-1")
+        self.assertEqual(self.call_for("task", "wait")[-2:], ["--", "t-1"])
+        with self.assertRaisesRegex(tripo.TripoError, "task_id is required"):
+            self.cli("tripo_task", action="status")
+
+    def test_export_operator_and_timeout(self):
+        self.cli("tripo_convert", input="p-1", format="glb", operator_id="op", export_timeout=90,
+                 texture_packaging="zip")
+        c = self.call_for("export")
+        self.assertEqual(c[c.index("--operator-id") + 1], "op")
+        self.assertEqual(c[c.index("--export-timeout") + 1], "90s")
+
+    def test_image_list(self):
+        self.responses[("image", "list")] = (0, "{}")
+        self.tool("tripo_image_list", page=2)
+        self.assertEqual(self.call_for("image", "list")[3], "2")
+
+
 class TestCliErrors(CliBase):
     def test_login_problem_says_how_to_sign_in(self):
         self.responses[("generate", "text")] = (1, "ERROR: session expired\n")
@@ -559,6 +623,18 @@ class TestCliImageAndBalance(CliBase):
         self.assertEqual(make[-2:], ["--", "expression sheet"])
         self.assertEqual((Path(self.tmp.name) / "img-1.glb").read_bytes(), MODEL_BYTES)
         self.assertIn("balance:", out)
+
+    def test_image_amount_fetches_every_asset(self):
+        url = f"http://127.0.0.1:{self.server.server_port}/cdn/model.glb"
+        self.responses[("image",)] = (0, "OK: Task created: img-1\nOK: Task created: img-2\n")
+        self.responses[("image", "get")] = (0, json.dumps({"url": url}))
+        self.tool("tripo_image", prompt="x", amount=2, out=self.tmp.name + os.sep)
+        make = next(c for c in self.calls if c[0] == "image" and c[1] != "get")
+        self.assertEqual(make[make.index("--amount") + 1], "2")
+        for name in ("img-1.glb", "img-2.glb"):
+            self.assertTrue((Path(self.tmp.name) / name).exists())
+        with self.assertRaisesRegex(tripo.TripoError, "1 to 4"):
+            self.tool("tripo_image", prompt="x", amount=5)
 
     def test_image_without_out_returns_the_url(self):
         self.responses[("image",)] = (0, "OK: Task created: img-1\n")
