@@ -198,13 +198,20 @@ def submit(path, body, out, nowait):
     return finish(task_id, out, nowait)
 
 
+def api_unsupported(a, names):
+    bad = sorted(n for n in names if a.get(n) is not None)
+    if bad:
+        raise TripoError(f"the api backend does not support {', '.join(bad)}; use backend cli")
+
+
 def api_generate(a):
     if a.get("images"):
         raise TripoError("images (multiview) needs backend cli")
     options = {k: a.get(k) for k in (
         "negative_prompt", "model_seed", "texture_seed", "face_limit", "texture", "pbr",
         "texture_quality", "geometry_quality", "auto_size", "quad", "smart_low_poly",
-        "export_orientation", "export_uv")}
+        "export_orientation", "export_uv", "generate_parts")}
+    api_unsupported(a, ("style", "style_image"))
     options["model"] = a.get("model", MODEL)
     if a.get("image"):
         path, options["input"] = "/generation/image-to-model", source(a["image"])
@@ -215,13 +222,21 @@ def api_generate(a):
     return submit(path, options, a.get("out"), a.get("nowait"))
 
 
+def api_format(a):
+    fmt = a.get("out_format", "fbx")
+    if fmt not in ("glb", "fbx"):
+        raise TripoError("the api backend exports glb or fbx here; use backend cli for "
+                         + ", ".join(CLI_FORMATS))
+    return fmt
+
+
 def api_rig(a):
     return submit("/animations/rig", {
         "input": source(a["input"]),
         "model": a.get("model"),
         "rig_type": a.get("rig_type"),
         "spec": a.get("spec", "mixamo"),
-        "out_format": a.get("out_format", "fbx"),
+        "out_format": api_format(a),
     }, a.get("out"), a.get("nowait"))
 
 
@@ -229,7 +244,7 @@ def api_retarget(a):
     clips = a["animations"]
     body = {
         "input": a["input"],
-        "out_format": a.get("out_format", "fbx"),
+        "out_format": api_format(a),
         "animate_in_place": a.get("animate_in_place"),
         "export_with_geometry": a.get("export_with_geometry"),
         "bake_animation": a.get("bake_animation"),
@@ -246,11 +261,15 @@ def api_convert(a):
         "quad", "face_limit", "texture_size", "texture_format", "bake", "pack_uv",
         "scale_factor", "with_animation", "animate_in_place", "export_orientation",
         "fbx_preset", "pivot_to_center_bottom", "export_vertex_colors")}
+    api_unsupported(a, ("texture_packaging",))
     body.update(input=source(a["input"]), format=fmt)
     return submit("/models/convert", body, a.get("out"), a.get("nowait"))
 
 
 def api_task(a):
+    if not a.get("task_id") or a.get("action", "get") != "get":
+        raise TripoError("the api backend only fetches a task by task_id; use backend cli for "
+                         "list, status and wait")
     return finish(a["task_id"], a.get("out"), False)
 
 
@@ -381,12 +400,20 @@ def cli_unsupported(a, names):
 def cli_generate(a):
     cli_unsupported(a, ("negative_prompt", "model_seed", "texture_seed", "auto_size",
                         "smart_low_poly", "export_orientation", "export_uv"))
+    if not a.get("image"):
+        cli_unsupported(a, ("style", "style_image"))
     if a.get("images"):
         if len(a["images"]) != 4:
             raise TripoError("images takes four paths: front, back, left, right")
         args, positional = ["generate", "multiview"], [cli_local(p) for p in a["images"]]
     elif a.get("image"):
         args, positional = ["generate", "image"], [cli_local(a["image"])]
+        if a.get("prompt"):
+            args += ["--prompt", a["prompt"]]
+        if a.get("style"):
+            args += ["--style", a["style"]]
+        if a.get("style_image"):
+            args += ["--style-image", cli_local(a["style_image"])]
     elif a.get("prompt"):
         args, positional = ["generate", "text"], [a["prompt"]]
     else:
@@ -397,7 +424,8 @@ def cli_generate(a):
                        ("--geometry-quality", "geometry_quality"), ("--face-limit", "face_limit")):
         if a.get(name) is not None:
             args += [flag, str(a[name])]
-    for flag, name in (("--texture", "texture"), ("--pbr", "pbr"), ("--quad", "quad")):
+    for flag, name in (("--texture", "texture"), ("--pbr", "pbr"), ("--quad", "quad"),
+                       ("--generate-parts", "generate_parts")):
         if a.get(name) is not None:
             args.append(f"{flag}={str(a[name]).lower()}")
     dest = None
@@ -414,6 +442,8 @@ def cli_generate(a):
 def cli_process(verb, a, extra):
     """Shared by rig and animate: both take a project id, a format and an output file."""
     fmt = a.get("out_format", "fbx")
+    if fmt not in CLI_FORMATS:
+        raise TripoError(f"out_format must be one of {', '.join(CLI_FORMATS)}")
     args = ["process", verb, "--format", fmt, *extra]
     dest = None
     if a.get("nowait"):
@@ -441,6 +471,8 @@ def cli_rig(a):
 def cli_retarget(a):
     cli_unsupported(a, ("animate_in_place", "export_with_geometry", "bake_animation"))
     extra = ["--animations", ",".join(a["animations"])]
+    if a.get("model"):
+        extra += ["--model-version", a["model"]]
     if a.get("rig_type"):
         extra += ["--rig-type", a["rig_type"]]
     return cli_process("animate", a, extra)
@@ -456,6 +488,13 @@ def cli_convert(a):
     args = ["export", "--format", fmt]
     if a.get("texture_size"):
         args += ["--texture-size", str(a["texture_size"])]
+    if a.get("export_timeout"):
+        args += ["--export-timeout", f"{int(a['export_timeout'])}s"]
+    if a.get("operator_id"):
+        args += ["--operator-id", a["operator_id"]]
+    for flag, name in (("--texture-packaging", "texture_packaging"), ("--model-version", "model")):
+        if a.get(name):
+            args += [flag, a[name]]
     for flag, name in (("--pack-uv", "pack_uv"), ("--pivot-to-center-bottom", "pivot_to_center_bottom"),
                        ("--with-animation", "with_animation")):
         if a.get(name) is not None:
@@ -467,8 +506,54 @@ def cli_convert(a):
     return cli_result(run_cli(args, [a["input"]]), dest)
 
 
+def cli_flags(a, *pairs):
+    """--flag value for each option that is set."""
+    out = []
+    for flag, name in pairs:
+        if a.get(name) is not None:
+            out += [flag, str(a[name])]
+    return out
+
+
+def cli_remesh(a):
+    extra = cli_flags(a, ("--model-version", "model"), ("--face-limit", "face_limit"))
+    extra += [f"--{n}={str(a[n]).lower()}" for n in ("quad", "bake") if a.get(n) is not None]
+    return cli_process("remesh", {"out_format": "glb", **a}, extra)
+
+
+def cli_segment(a):
+    extra = cli_flags(a, ("--model-version", "model"), ("--granularity", "granularity"))
+    return cli_process("segment", {"out_format": "glb", **a}, extra)
+
+
+def cli_stylize(a):
+    extra = cli_flags(a, ("--model-version", "model"), ("--style", "style"))
+    return cli_process("stylize", {"out_format": "glb", **a}, extra)
+
+
+def cli_texture(a):
+    extra = cli_flags(a, ("--model-version", "model"), ("--mode", "mode"),
+                      ("--quality", "quality"), ("--alignment", "alignment"))
+    return cli_process("texture", {"out_format": "glb", **a}, extra)
+
+
 def cli_task(a):
-    return json.dumps(cli_json(["task", "get"], [a["task_id"]]), indent=2)
+    action = a.get("action", "get")
+    if action not in ("get", "list", "status", "wait"):
+        raise TripoError("action must be get, list, status or wait")
+    if action == "list":
+        args = cli_flags(a, ("--type", "type"), ("--size", "size"), ("--offset", "offset"))
+        return run_cli(["task", "list", *args, "--output-format", "json"]).strip()
+    if not a.get("task_id"):
+        raise TripoError(f"task_id is required for {action}")
+    if action == "get":
+        return json.dumps(cli_json(["task", "get"], [a["task_id"]]), indent=2)
+    return run_cli(["task", action, "--output-format", "json"], [a["task_id"]]).strip()
+
+
+def image_list(a):
+    args = cli_flags(a, ("--page", "page"), ("--page-size", "page_size"))
+    return run_cli(["image", "list", *args, "--output-format", "json"]).strip()
 
 
 def image(a):
@@ -481,18 +566,24 @@ def image(a):
         args += ["-i", cli_local(a["input"])]
     if a.get("sketch"):
         args.append("--sketch")
+    if a.get("amount") is not None:
+        if not 1 <= a["amount"] <= 4:
+            raise TripoError("amount must be 1 to 4")
+        args += ["--amount", str(a["amount"])]
     text = run_cli(["image", *args], [a["prompt"]])
-    asset = cli_field(text, r"Task created: (\S+)")
-    if not asset:
+    assets = re.findall(r"Task created: (\S+)", text)
+    if not assets:
         raise TripoError(f"the tripo CLI did not report a task: {text.strip()[-200:]}")
-    # The CLI's own -o writes a single image to a file path only, so the download is done here.
-    url = cli_json(["image", "get"], [asset]).get("url")
-    lines = [f"image {asset}"]
-    if url and a.get("out"):
-        dest = fetch(url, a["out"], asset)
-        lines.append(f"saved {dest} ({dest.stat().st_size / 1024:.0f} KiB)")
-    elif url:
-        lines.append(f"url (expires in minutes): {url}")
+    lines = []
+    for asset in assets:
+        # The CLI's own -o writes a single image to a file path only, so the download is done here.
+        url = cli_json(["image", "get"], [asset]).get("url")
+        lines.append(f"image {asset}")
+        if url and a.get("out"):
+            dest = fetch(url, a["out"], asset)
+            lines.append(f"saved {dest} ({dest.stat().st_size / 1024:.0f} KiB)")
+        elif url:
+            lines.append(f"url (expires in minutes): {url}")
     if footer := cli_footer():
         lines.append(footer)
     return "\n".join(lines)
@@ -556,6 +647,10 @@ BACKEND = {"type": "string", "enum": ["api", "cli"],
            "description": "api spends API credits; cli drives the tripo CLI and spends Studio "
                           "credits. Default: TRIPO_BACKEND, else api when a key exists, else cli"}
 
+CLI_INPUT = {"type": "string", "description": "the project id from tripo_generate"}
+CLI_MODEL = {"type": "string", "description": "model version"}
+CLI_FORMAT = {"type": "string", "enum": list(CLI_FORMATS), "default": "glb"}
+
 TOOLS = [
     {
         "name": "tripo_set_key",
@@ -580,7 +675,8 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "backend": BACKEND,
-                "prompt": {"type": "string", "description": "up to 1024 characters"},
+                "prompt": {"type": "string", "description": "up to 1024 characters; with an image on "
+                                                            "the cli it is an optional guiding prompt"},
                 "image": {**INPUT, "description": "image source for image to model "
                                                   "(PNG, JPEG or WebP, at least 256 px); the "
                                                   "cli backend takes local files only"},
@@ -589,13 +685,18 @@ TOOLS = [
                 "visibility": {"type": "string", "enum": ["public", "private", "shareable"],
                                "default": "private",
                                "description": "cli only; the CLI itself defaults to public"},
+                "style": {"type": "string", "description": "cli only, image input only: style preset"},
+                "style_image": {"type": "string", "description": "cli only, image input only: "
+                                                                 "local style reference image"},
                 "negative_prompt": {"type": "string"},
                 "model": {"type": "string", "default": MODEL,
-                          "enum": ["v3.1-20260211", "v3.0-20250812", "v2.5-20250123"]},
+                          "enum": ["v3.1-20260211", "v3.0-20250812", "v2.5-20250123",
+                                   "Nexus-v1.0-20260214", "P-v1.0-20250506"]},
+                "generate_parts": {"type": "boolean", "description": "generate as multiple parts"},
                 "texture": {"type": "boolean", "default": True},
                 "pbr": {"type": "boolean", "default": True},
                 "texture_quality": {"type": "string", "enum": ["fast", "standard", "detailed", "extreme"]},
-                "geometry_quality": {"type": "string", "enum": ["standard", "detailed"]},
+                "geometry_quality": {"type": "string", "enum": ["standard", "detailed", "original"]},
                 "face_limit": {"type": "integer"},
                 "auto_size": {"type": "boolean", "description": "scale to real-world meters"},
                 "quad": {"type": "boolean", "description": "quad mesh; forces FBX"},
@@ -624,7 +725,8 @@ TOOLS = [
                 "rig_type": {"type": "string", "enum": [
                     "biped", "quadruped", "hexapod", "octopod", "avian", "serpentine", "aquatic"]},
                 "spec": {"type": "string", "enum": ["tripo", "mixamo"], "default": "mixamo"},
-                "out_format": {"type": "string", "enum": ["glb", "fbx"], "default": "fbx"},
+                "out_format": {"type": "string", "enum": list(CLI_FORMATS), "default": "fbx",
+                               "description": "the api backend exports glb or fbx only"},
                 "out": OUT,
                 "nowait": NOWAIT,
             },
@@ -644,7 +746,9 @@ TOOLS = [
                 "input": {"type": "string", "description": "rig task id (api) or project id (cli)"},
                 "animations": {"type": "array", "minItems": 1, "items": {"type": "string"}},
                 "rig_type": {"type": "string", "description": "cli only, default biped"},
-                "out_format": {"type": "string", "enum": ["glb", "fbx"], "default": "fbx"},
+                "model": {"type": "string", "description": "cli only: animation model version"},
+                "out_format": {"type": "string", "enum": list(CLI_FORMATS), "default": "fbx",
+                               "description": "the api backend exports glb or fbx only"},
                 "animate_in_place": {"type": "boolean"},
                 "export_with_geometry": {"type": "boolean"},
                 "bake_animation": {"type": "boolean", "description": "GLB only"},
@@ -670,6 +774,12 @@ TOOLS = [
                 "face_limit": {"type": "integer"},
                 "texture_size": {"type": "integer", "default": 4096},
                 "texture_format": {"type": "string", "default": "JPEG"},
+                "operator_id": {"type": "string", "description": "cli only: download this "
+                                                                "operator's model, skipping export"},
+                "export_timeout": {"type": "integer", "description": "cli only: seconds"},
+                "texture_packaging": {"type": "string", "enum": ["embedded", "zip"],
+                                      "description": "cli only"},
+                "model": {"type": "string", "description": "cli only: export model version"},
                 "bake": {"type": "boolean", "default": True},
                 "pack_uv": {"type": "boolean"},
                 "scale_factor": {"type": "number", "default": 1},
@@ -692,10 +802,70 @@ TOOLS = [
                        "task's status and details.",
         "inputSchema": {
             "type": "object",
-            "properties": {"backend": BACKEND, "task_id": {"type": "string"}, "out": OUT},
-            "required": ["task_id"],
+            "properties": {
+                "backend": BACKEND,
+                "task_id": {"type": "string"},
+                "action": {"type": "string", "enum": ["get", "list", "status", "wait"],
+                           "default": "get", "description": "cli only: list needs no task_id; "
+                                                            "status is one progress check; "
+                                                            "wait polls until the task ends"},
+                "type": {"type": "string", "enum": ["all", "textured", "untextured", "rigged"],
+                         "description": "cli list filter"},
+                "size": {"type": "integer", "description": "cli list page size"},
+                "offset": {"type": "integer", "description": "cli list offset"},
+                "out": OUT,
+            },
         },
         "run": task,
+    },
+    {
+        "name": "tripo_remesh",
+        "description": "Retopologize a model. cli backend only. Input is the project id.",
+        "inputSchema": {"type": "object", "properties": {
+            "input": CLI_INPUT, "quad": {"type": "boolean"}, "face_limit": {"type": "integer"},
+            "bake": {"type": "boolean", "description": "bake textures after remesh"},
+            "model": CLI_MODEL, "out_format": CLI_FORMAT, "out": OUT, "nowait": NOWAIT},
+            "required": ["input"]},
+        "run": cli_remesh,
+    },
+    {
+        "name": "tripo_segment",
+        "description": "Split a model into semantic parts. cli backend only.",
+        "inputSchema": {"type": "object", "properties": {
+            "input": CLI_INPUT,
+            "granularity": {"type": "string", "enum": ["simple", "balanced", "detailed"]},
+            "model": CLI_MODEL, "out_format": CLI_FORMAT, "out": OUT, "nowait": NOWAIT},
+            "required": ["input"]},
+        "run": cli_segment,
+    },
+    {
+        "name": "tripo_stylize",
+        "description": "Apply a style preset to a model. cli backend only.",
+        "inputSchema": {"type": "object", "properties": {
+            "input": CLI_INPUT, "style": {"type": "string", "description": "style name"},
+            "model": CLI_MODEL, "out_format": CLI_FORMAT, "out": OUT, "nowait": NOWAIT},
+            "required": ["input", "style"]},
+        "run": cli_stylize,
+    },
+    {
+        "name": "tripo_texture",
+        "description": "Generate, redo or add PBR to the textures of a model. cli backend only.",
+        "inputSchema": {"type": "object", "properties": {
+            "input": CLI_INPUT,
+            "mode": {"type": "string", "enum": ["generate", "retexture", "pbr"]},
+            "quality": {"type": "string", "enum": ["standard", "detailed", "extreme"]},
+            "alignment": {"type": "string", "enum": ["standard", "detailed"],
+                          "description": "generate mode only"},
+            "model": CLI_MODEL, "out_format": CLI_FORMAT, "out": OUT, "nowait": NOWAIT},
+            "required": ["input"]},
+        "run": cli_texture,
+    },
+    {
+        "name": "tripo_image_list",
+        "description": "List generated images. cli backend only.",
+        "inputSchema": {"type": "object", "properties": {
+            "page": {"type": "integer"}, "page_size": {"type": "integer", "maximum": 100}}},
+        "run": image_list,
     },
     {
         "name": "tripo_image",
@@ -711,8 +881,10 @@ TOOLS = [
                     "gemini_3.1_flash_image_preview", "midjourney", "gpt_image_1.5", "gpt_image_2"]},
                 "scale": {"type": "string", "enum": ["1:1", "3:4", "4:3", "16:9", "9:16"]},
                 "sketch": {"type": "boolean", "description": "treat input as a sketch to render"},
+                "amount": {"type": "integer", "minimum": 1, "maximum": 4,
+                           "description": "number of images to generate (default 1)"},
                 "out": {**OUT, "description": "file path, or a directory (ending in /) to save "
-                                              "as <asset id>.png. Omit to get the short-lived URL."},
+                                              "as <asset id>.png; use a directory when amount > 1. Omit to get the short-lived URL."},
             },
             "required": ["prompt"],
         },
