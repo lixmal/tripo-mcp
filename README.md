@@ -75,6 +75,24 @@ Generation costs credits. `tripo_image` is free within Studio's monthly image al
 - **Privacy.** The CLI publishes results to Tripo's community by default. The server passes `--visibility private` unless you ask for another value.
 - **Credit expiry.** Every `cli` result ends with a line like `balance: 5990 credits; 5910 expire 2026-10-30 (in 27 days); plan professional_6k until 2026-10-30`.
 
+### Choosing what to use
+
+The server also sends these instructions to the assistant, so it can pick without being told.
+
+| You want | Use |
+|---|---|
+| Best looking, detailed, textured model | `tripo_generate` with the default HD model (`v3.1-20260211`) |
+| Low-poly, clean topology with a polycount you set | `tripo_generate` with a Smart Mesh model (P-series, for example `P-v1.0-20250506`), `quad`, and `face_limit` |
+| One object split into separate pieces | `generate_parts` (cli) |
+| New topology on an existing model | `tripo_remesh` (cli) |
+| Retexture, restyle or split an existing model | `tripo_texture`, `tripo_stylize`, `tripo_segment` (cli) |
+| Animation | `tripo_rig`, then `tripo_retarget` |
+| Another file format | `tripo_convert`, or `out` with the right extension on the cli |
+| Reference images to feed into a model | `tripo_image` (cli) |
+| Which credits you have | `tripo_balance` |
+
+Studio's Smart Mesh toggle is a choice of model, not a separate flag. Studio shows newer Smart Mesh models than the CLI lists: any model id is passed through, so use the id Studio's network request shows.
+
 ### Waiting and downloads
 
 Tools wait for the task and, when given `out`, download the result straight away. The api's model URLs expire after about five minutes, so `out` is the reliable way to keep a result. `out` is a file path, or a directory (end it with `/`) to get a generated file name. `nowait` returns the task id at once instead.
