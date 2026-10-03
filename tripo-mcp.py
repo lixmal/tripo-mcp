@@ -651,6 +651,37 @@ CLI_INPUT = {"type": "string", "description": "the project id from tripo_generat
 CLI_MODEL = {"type": "string", "description": "model version"}
 CLI_FORMAT = {"type": "string", "enum": list(CLI_FORMATS), "default": "glb"}
 
+INSTRUCTIONS = """\
+Tripo makes 3D models. Pick the options by what the user wants.
+
+Backend. api spends API credits and needs a key. cli spends Studio plan credits and needs \
+`tripo-cli auth login`. If the user has a Studio plan and no API credits, use cli. Without a \
+`backend` argument the server uses api when a key exists, else cli. These need the cli: four \
+views to a model, generate_parts, style, tripo_image, remesh, segment, stylize, texture.
+
+Model kind (tripo_generate `model`).
+- HD model (default v3.1-20260211): detailed, textured, high-poly. Use it for hero assets, \
+organic shapes and anything judged on looks.
+- Smart Mesh (a P-series id such as P-v1.0-20250506): clean, low-poly topology you control \
+with quad and face_limit (Studio allows 500 to 25000). Use it for game-ready or animation \
+meshes where the polycount matters. Studio's newest Smart Mesh model may not be in this list: \
+any id the backend accepts can be passed.
+Studio's "Smart Mesh" toggle is just this choice of model; there is no separate flag.
+
+Common choices. generate_parts splits the result into separate parts (cli). quad gives a quad \
+mesh (and forces FBX on the api). face_limit caps the face count. texture_quality and \
+geometry_quality trade cost for detail. Ask before spending credits on an uncertain request: \
+generation costs roughly 25 to 55 credits, and tripo_balance shows the real figure.
+
+Pipeline. tripo_generate, then tripo_rig, then tripo_retarget for animation clips, then \
+tripo_convert for another format. To change an existing model: tripo_remesh (new topology), \
+tripo_texture, tripo_stylize, tripo_segment. Each takes the id the previous step printed \
+(task id on api, project id on cli). Set `out` to save the file: result URLs expire in minutes. \
+Use nowait for a long task and fetch it later with tripo_task.
+
+An option a backend lacks is refused with an error naming the backend that has it.
+"""
+
 TOOLS = [
     {
         "name": "tripo_set_key",
@@ -910,7 +941,8 @@ def handle(msg):
         return {
             "protocolVersion": params.get("protocolVersion", "2025-06-18"),
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "tripo", "version": "1.1.0"},
+            "serverInfo": {"name": "tripo", "version": "1.2.0"},
+            "instructions": INSTRUCTIONS,
         }
     if method == "ping":
         return {}
