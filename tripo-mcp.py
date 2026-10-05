@@ -662,11 +662,13 @@ views to a model, generate_parts, style, tripo_image, remesh, segment, stylize, 
 Model kind (tripo_generate `model`).
 - HD model (default v3.1-20260211): detailed, textured, high-poly. Use it for hero assets, \
 organic shapes and anything judged on looks.
-- Smart Mesh (a P-series id such as P-v1.0-20250506): clean, low-poly topology you control \
-with quad and face_limit (Studio allows 500 to 25000). Use it for game-ready or animation \
-meshes where the polycount matters. Studio's newest Smart Mesh model may not be in this list: \
-any id the backend accepts can be passed.
-Studio's "Smart Mesh" toggle is just this choice of model; there is no separate flag.
+- Smart Mesh P2 (P2-20260801): production-ready with native quad topology, up to 4 LOD \
+variants per prompt, automatic part separation, face_limit up to 25000 quads or 50000 triangles. \
+Use it for game-ready assets where topology and polycount matter.
+- Smart Mesh P1 (P-v1.0-20250506 or similar): earlier generation, clean low-poly topology with \
+quad and face_limit control. Use it for animation meshes or when P2 is not available.
+Studio's "Smart Mesh" toggle is just this choice of model; there is no separate flag. Any id \
+the backend accepts can be passed.
 
 Common choices. generate_parts splits the result into separate parts (cli). quad gives a quad \
 mesh (and forces FBX on the api). face_limit caps the face count. texture_quality and \
@@ -721,10 +723,11 @@ TOOLS = [
                                                                  "local style reference image"},
                 "negative_prompt": {"type": "string"},
                 "model": {"type": "string", "default": MODEL,
-                          "description": "v3.1-20260211 (HD), v3.0-20250812, v2.5-20250123, "
-                                         "Nexus-v1.0-20260214, or a Smart Mesh P-series id such "
-                                         "as P-v1.0-20250506; any id the backend accepts passes "
-                                         "through"},
+                          "description": "v3.1-20260211 (HD, default), v3.0-20250812, v2.5-20250123, "
+                                         "Nexus-v1.0-20260214, Smart Mesh P2-20260801 (production-ready "
+                                         "quad topology, up to 4 LOD variants, auto-separated parts), or "
+                                         "earlier P-series such as P-v1.0-20250506; any id the backend "
+                                         "accepts passes through"},
                 "generate_parts": {"type": "boolean", "description": "generate as multiple parts"},
                 "texture": {"type": "boolean", "default": True},
                 "pbr": {"type": "boolean", "default": True},
