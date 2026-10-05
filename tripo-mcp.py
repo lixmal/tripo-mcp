@@ -670,10 +670,11 @@ quad and face_limit control. Use it for animation meshes or when P2 is not avail
 Studio's "Smart Mesh" toggle is just this choice of model; there is no separate flag. Any id \
 the backend accepts can be passed.
 
-Common choices. generate_parts splits the result into separate parts (cli). quad gives a quad \
-mesh (and forces FBX on the api). face_limit caps the face count. texture_quality and \
-geometry_quality trade cost for detail. Ask before spending credits on an uncertain request: \
-generation costs roughly 25 to 55 credits, and tripo_balance shows the real figure.
+Common choices. generate_parts splits the result into separate parts (cli). quad=true gives \
+a quad mesh (four-sided faces, cleaner for rigging; P2 always makes quads and rejects this flag, \
+so omit it for P2). face_limit caps the face count (25k max for quads, 50k for triangles). \
+texture_quality and geometry_quality trade cost for detail. Ask before spending credits on an \
+uncertain request: generation costs roughly 25 to 55 credits, and tripo_balance shows the real figure.
 
 Pipeline. tripo_generate, then tripo_rig, then tripo_retarget for animation clips, then \
 tripo_convert for another format. To change an existing model: tripo_remesh (new topology), \
