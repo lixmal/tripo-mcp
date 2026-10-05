@@ -82,7 +82,8 @@ The server also sends these instructions to the assistant, so it can pick withou
 | You want | Use |
 |---|---|
 | Best looking, detailed, textured model | `tripo_generate` with the default HD model (`v3.1-20260211`) |
-| Low-poly, clean topology with a polycount you set | `tripo_generate` with a Smart Mesh model (P-series, for example `P-v1.0-20250506`), `quad`, and `face_limit` |
+| Production-ready game asset with native quad topology and multiple LOD variants | `tripo_generate` with `P2-20260801` (newest Smart Mesh), `quad`, and `face_limit` (up to 25000 quads, or 50000 triangles) |
+| Clean topology with a polycount you set (older Smart Mesh) | `tripo_generate` with a Smart Mesh model (P-series, for example `P-v1.0-20250506`), `quad`, and `face_limit` |
 | One object split into separate pieces | `generate_parts` (cli) |
 | New topology on an existing model | `tripo_remesh` (cli) |
 | Retexture, restyle or split an existing model | `tripo_texture`, `tripo_stylize`, `tripo_segment` (cli) |
@@ -90,6 +91,10 @@ The server also sends these instructions to the assistant, so it can pick withou
 | Another file format | `tripo_convert`, or `out` with the right extension on the cli |
 | Reference images to feed into a model | `tripo_image` (cli) |
 | Which credits you have | `tripo_balance` |
+
+**Smart Mesh models** (P-series):
+- `P2-20260801` (Sept 2026): native quad topology, up to 4 LOD variants per prompt, automatic part separation (body/clothing/accessories), Mesh Edit for regional regeneration. Best for production pipelines.
+- `P-v1.0-20250506`: earlier Smart Mesh with quad support, up to 25000 quads.
 
 Studio's Smart Mesh toggle is a choice of model, not a separate flag. Studio shows newer Smart Mesh models than the CLI lists: any model id is passed through, so use the id Studio's network request shows.
 
