@@ -82,8 +82,8 @@ The server also sends these instructions to the assistant, so it can pick withou
 | You want | Use |
 |---|---|
 | Best looking, detailed, textured model | `tripo_generate` with the default HD model (`v3.1-20260211`) |
-| Production-ready game asset with native quad topology and multiple LOD variants | `tripo_generate` with `P2-20260801` (newest Smart Mesh), `quad`, and `face_limit` (up to 25000 quads, or 50000 triangles) |
-| Clean topology with a polycount you set (older Smart Mesh) | `tripo_generate` with a Smart Mesh model (P-series, for example `P-v1.0-20250506`), `quad`, and `face_limit` |
+| Production-ready game asset with native quad topology and multiple LOD variants | `tripo_generate` with `P2-20260801` (newest Smart Mesh), `face_limit` up to 25000, no `quad` flag (P2 makes quads always) |
+| Clean topology with a polycount you set (older Smart Mesh) | `tripo_generate` with a Smart Mesh model (P-series, for example `P-v1.0-20250506`), `quad: true`, and `face_limit` |
 | One object split into separate pieces | `generate_parts` (cli) |
 | New topology on an existing model | `tripo_remesh` (cli) |
 | Retexture, restyle or split an existing model | `tripo_texture`, `tripo_stylize`, `tripo_segment` (cli) |
@@ -97,6 +97,18 @@ The server also sends these instructions to the assistant, so it can pick withou
 - `P-v1.0-20250506`: earlier Smart Mesh with quad support, up to 25000 quads.
 
 Studio's Smart Mesh toggle is a choice of model, not a separate flag. Studio shows newer Smart Mesh models than the CLI lists: any model id is passed through, so use the id Studio's network request shows.
+
+**Topology: quads vs triangles**
+
+Tripo can generate two kinds of face topology:
+
+- **Triangles** (default): three-sided faces. Denser mesh, more flexible for complex organic shapes, easier to subdivide. Use for characters, creatures, or anything with fine detail and curvature. Works with all models.
+- **Quads** (set `quad: true` on non-P2 models): four-sided faces with clean edge loops. Cleaner topology, easier to rig and animate, better for hard-surface objects and game assets. P2 always generates quads natively; P1 and other models can optionally generate quads with the `quad: true` flag.
+
+Mesh size limits differ by topology and model:
+- **Triangles:** up to 50000 faces on most models.
+- **Quads (P1/older):** up to 25000 faces when `quad: true`.
+- **P2 (quads only):** P2 always generates quads natively and ignores the `quad` flag; it has up to 25000 quads for game-ready assets or 50000 triangles if you don't want quads. Passing `quad` with P2 causes an error; omit the flag.
 
 ### Waiting and downloads
 
