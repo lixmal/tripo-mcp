@@ -684,6 +684,12 @@ class TestProtocol(Base):
             self.assertNotIn("run", t)
             self.assertEqual(t["inputSchema"]["type"], "object")
 
+    def test_animation_names_in_both_spellings(self):
+        out = self.tool("tripo_animations")
+        self.assertIn("preset:walk | preset:biped:walk", out)
+        self.assertIn("preset:quadruped:walk | preset:quadruped:walk", out)
+        self.assertEqual(tripo.cli_preset("preset:hexapod:walk"), "preset:hexapod:walk")
+
     def test_tool_error_is_a_result_not_a_protocol_error(self):
         (reply,) = self.rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                              "params": {"name": "tripo_generate", "arguments": {}}})

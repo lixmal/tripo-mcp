@@ -615,6 +615,20 @@ convert = either(api_convert, cli_convert)
 task = either(api_task, cli_task)
 
 
+def cli_preset(name):
+    """The cli names a preset with its rig type; the api drops it for biped."""
+    return name if name.count(":") > 1 else "preset:biped:" + name.split(":", 1)[1]
+
+
+def animations(a):
+    rows = ["clip names for tripo_retarget (api name | cli name):"]
+    rows += [f"  {name} | {cli_preset(name)}" for name in PRESETS]
+    rows.append("Tripo has no endpoint that lists its presets: this is the set its docs name, and "
+                "the biped snapshot has 90+ more. A name Tripo does not know fails when the "
+                "retarget task runs. Tripo offers no text or video to animation.")
+    return "\n".join(rows)
+
+
 def balance(a):
     if pick_backend(a) == "cli":
         return credits_text(cli_json(["account", "balance"]))
@@ -797,6 +811,13 @@ TOOLS = [
         "run": retarget,
     },
     {
+        "name": "tripo_animations",
+        "description": "List the preset animation names tripo_retarget accepts, in api and cli "
+                       "spelling. Free, makes no request.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "run": animations,
+    },
+    {
         "name": "tripo_convert",
         "description": "Convert a model to another format with optional mesh and texture "
                        "processing.",
@@ -945,7 +966,7 @@ def handle(msg):
         return {
             "protocolVersion": params.get("protocolVersion", "2025-06-18"),
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "tripo", "version": "1.2.0"},
+            "serverInfo": {"name": "tripo", "version": "1.3.0"},
             "instructions": INSTRUCTIONS,
         }
     if method == "ping":

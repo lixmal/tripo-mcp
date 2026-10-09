@@ -52,6 +52,7 @@ Environment variables: `TRIPO_BACKEND`, `TRIPO_API_KEY`, `TRIPO_CLI`, and `TRIPO
 | `tripo_image` | Generate an image from a prompt, optionally from an input image or a sketch | cli only |
 | `tripo_rig` | Add a skeleton | both |
 | `tripo_retarget` | Apply preset animations to a rigged model | both |
+| `tripo_animations` | List the preset animation names `tripo_retarget` takes, in api and cli spelling | both |
 | `tripo_convert` | Convert to another format | both |
 | `tripo_task` | api: wait for an earlier task and save its model. cli: show its details | both |
 | `tripo_balance` | Show credits. On the cli: how many expire, when, and the plan | both |
@@ -70,7 +71,7 @@ Generation costs credits. `tripo_image` is free within Studio's monthly image al
 ### What differs between backends
 
 - **Inputs.** On `api` an input is a task id (`task_...`), a file token (`file_...`), a URL, or a local path, which is uploaded for you. On `cli` it is the project id that `tripo_generate` printed, and images must be local files.
-- **Animation names.** `api` uses `preset:walk`, `cli` uses `preset:biped:walk`.
+- **Animation names.** `api` uses `preset:walk`, `cli` uses `preset:biped:walk`. `tripo_animations` lists the known names. Tripo has no list endpoint, and no text or video to animation, so the list is the set its docs name and is not exhaustive.
 - **Unsupported options.** An option a backend lacks is rejected with an error, never silently dropped.
 - **Privacy.** The CLI publishes results to Tripo's community by default. The server passes `--visibility private` unless you ask for another value.
 - **Credit expiry.** Every `cli` result ends with a line like `balance: 5990 credits; 5910 expire 2026-10-30 (in 27 days); plan professional_6k until 2026-10-30`.
